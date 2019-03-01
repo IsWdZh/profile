@@ -7,7 +7,7 @@ import copy
 import collections
 # from subprocess import check_output, check_call, CalledProcessError
 import subprocess
-from progressbar import *
+# from progressbar import *
 
 
 def pbtxt(pbtxt_file):
@@ -21,9 +21,7 @@ def pbtxt(pbtxt_file):
 
     layer_count = 0
     getename, gettyname, fusion_exit = False, False, False
-    cname = {}
     cname = collections.OrderedDict()
-    gname = {}
     gname = collections.OrderedDict()
     with open(pbtxt_file, "r") as f:
         for line in f.readlines():
@@ -101,8 +99,8 @@ def benchdnn(eopnames, pbtxt, graph, op, kernels):
            "KMP_AFFINITY": "proclist=[0-27]",
            "granularity": "thread,explicit"
            }
-    # for key, value in env.items():
-    #     os.environ[key] = value
+    for key, value in env.items():
+        os.environ[key] = value
 
     attr = {"1":"--attr=\"post_ops='relu'\"",
             "2":"--attr=\"post_ops='sum'\"",
@@ -118,12 +116,6 @@ def benchdnn(eopnames, pbtxt, graph, op, kernels):
             pbtxt[each] = ""
         if pbtxt[each] != "":
             cmd.append(attr[pbtxt[each]])
-        # if pbtxt[each] != "":
-        #     if pbtxt[each] = "3":
-        #             kernel_shape = graph[each]["kernel_shape"]
-            #     if kernel_shape != "":
-        #           cmd.append(attr["1"])
-        #         kernel_shape = graph[each]["kernel_shape"]
 
         kernel_type = graph[each]["kernel_type"]
         kernel_shape = graph[each]["kernel_shape"]
@@ -141,6 +133,8 @@ def benchdnn(eopnames, pbtxt, graph, op, kernels):
                     continue
                 min_time = float(time[0][0])
                 avg_time = float(time[0][1])
+                # min_time = 2
+                # avg_time = 2
                 print(each,"     benchdnn: min time = ", min_time, "   avg time = ", avg_time)
                 benchdnn_graph[each]["benchdnn"] = {"min time": min_time, "avg time": avg_time}
                 eop = re.split(r'\d+$', each)[0]
@@ -200,15 +194,14 @@ def getinfo(filename):
     sameop = False
     kernel_flag = False
 
-    widgets = ['Extract log info: ', Percentage(), ' ', Bar('#'), ' ', Timer(),
-               ' ', ETA()]
+    # widgets = ['Extract log info: ', Percentage(), ' ', Bar('#'), ' ', Timer(),
+    #            ' ', ETA()]
 
     with open(filename, "r") as f_log:
         totalline = f_log.readlines()
-        pbar = ProgressBar(widgets=widgets, maxval=len(totalline)).start()
+        # pbar = ProgressBar(widgets=widgets, maxval=len(totalline)).start()
         for line in totalline:
-            count += 1
-            pbar.update(count)
+            # pbar.update(count+1)
             if "begin to run benchmark" in line:
                 graph, op, part, kernels, eachop = {}, {}, {}, {}, {}
                 iter = 0
@@ -391,7 +384,7 @@ def getinfo(filename):
                 else:
                     continue
 
-        pbar.finish()
+        # pbar.finish()
 
     for key in op.keys():
         if "reorder_time" not in op[key].keys():
@@ -699,6 +692,7 @@ def summary(cfilename, gfilename):
                     if len(line) > 1 and isinstance(float(line[1]), float):
                         cpu_key_list.append(line[0])
                         if pb:
+                            # line[8] maybe "" ,such as Maxpool
                             cpu[line[0]] = {"optime": float(line[1]), "reorder_time": float(line[2]),
                                             "kernel_time": float(line[3]), "framework": float(line[4]),
                                             "kernel_type": line[5], "kernel_shape": line[6],
@@ -765,8 +759,6 @@ def summary(cfilename, gfilename):
     new_gpu = collections.OrderedDict()
     kernels_to_gpu = {}
 
-    # print(len(cpu_key_list), len(gpu_key_list))
-    #cpu[line[0]] = [optime, reorder_time, kernel_time, framework_time, kernel_type, kernel_shape]
 
     for i in range(len(cpu_key_list) - 1):
         try:
@@ -835,9 +827,9 @@ def summary(cfilename, gfilename):
                     pos += 1
                 new_gpu[cpu_key_list[i]] = [newtime, convname, convtime]
             else:
-                # kernels_to_gpu[gpu_key_list[pos]] = [cpu[cpu_key_list[i]]["kernel_type"],
-                #                                      cpu[cpu_key_list[i]]["kernel_shape"]]
                 if pb:
+                    if "benchdnn" not in cpu[cpu_key_list[i]]:
+                        cpu[cpu_key_list[i]]["benchdnn"] = ""
                     kernels_to_gpu[gpu_key_list[pos]] = {"kernel_type": cpu[cpu_key_list[i]]["kernel_type"],
                                                          "kernel_shape": cpu[cpu_key_list[i]]["kernel_shape"],
                                                          "benchdnn": cpu[cpu_key_list[i]]["benchdnn"]}
@@ -853,6 +845,8 @@ def summary(cfilename, gfilename):
             break
 
     if pb:
+        if "benchdnn" not in cpu[cpu_key_list[i]]:
+            cpu[cpu_key_list[i]]["benchdnn"] = ""
         kernels_to_gpu[gpu_key_list[-1]] = {"kernel_type": cpu[cpu_key_list[-1]]["kernel_type"],
                                              "kernel_shape": cpu[cpu_key_list[-1]]["kernel_shape"],
                                              "benchdnn": cpu[cpu_key_list[-1]]["benchdnn"]}
@@ -916,10 +910,11 @@ def newgpu(oldgpu, new_gpu_file, kernels_to_gpu, order, gpu_op, gpu_part):
                         print(spline)
                         if "benchdnn" in kernels_to_gpu[spline[0]]:
                             sumopname = re.split(r'\d+$', spline[0])[0]
-                            if "benchdnn" in new_gpu_op[sumopname].keys():
-                                new_gpu_op[sumopname]["benchdnn"] += kernels_to_gpu[spline[0]]["benchdnn"]
-                            else:
-                                new_gpu_op[sumopname]["benchdnn"] = kernels_to_gpu[spline[0]]["benchdnn"]
+                            if kernels_to_gpu[spline[0]]["benchdnn"] != "":
+                                if "benchdnn" in new_gpu_op[sumopname].keys():
+                                    new_gpu_op[sumopname]["benchdnn"] += float(kernels_to_gpu[spline[0]]["benchdnn"])
+                                else:
+                                    new_gpu_op[sumopname]["benchdnn"] = float(kernels_to_gpu[spline[0]]["benchdnn"])
                         spline[-3] = kernels_to_gpu[spline[0]]["kernel_type"]
                         spline[-2] = kernels_to_gpu[spline[0]]["kernel_shape"]
                         if spline[-3] != "":
@@ -930,13 +925,14 @@ def newgpu(oldgpu, new_gpu_file, kernels_to_gpu, order, gpu_op, gpu_part):
                                 conv_breakdown[spline[-3]]["optime"] += float(spline[-4])
                                 # conv_breakdown[spline[-3]] += float(spline[-4])
 
-                            if "benchdnn" in conv_breakdown[spline[-3]].keys():
-                                conv_breakdown[spline[-3]]["benchdnn"] += float(kernels_to_gpu[spline[0]]["benchdnn"])
-                            else:
-                                conv_breakdown[spline[-3]]["benchdnn"] = float(kernels_to_gpu[spline[0]]["benchdnn"])
+                            if kernels_to_gpu[spline[0]]["benchdnn"] != "":
+                                if "benchdnn" in conv_breakdown[spline[-3]].keys():
+                                    conv_breakdown[spline[-3]]["benchdnn"] += float(kernels_to_gpu[spline[0]]["benchdnn"])
+                                else:
+                                    conv_breakdown[spline[-3]]["benchdnn"] = float(kernels_to_gpu[spline[0]]["benchdnn"])
 
                         spline.append(kernels_to_gpu[spline[0]]["benchdnn"])
-                        line = " , ".join(spline)
+                        line = " , ".join("%s"%i for i in spline)
                         newoutfile.write(line + "\n")
                     else:
                         newoutfile.write(line)
@@ -945,10 +941,10 @@ def newgpu(oldgpu, new_gpu_file, kernels_to_gpu, order, gpu_op, gpu_part):
                         spline[-2] = kernels_to_gpu[spline[0]]["kernel_type"]
                         spline[-1] = kernels_to_gpu[spline[0]]["kernel_shape"]
                         if spline[-2] != "":
-                            if spline[-2] not in conv_breakdown:
-                                conv_breakdown[spline[-2]] = float(spline[-3])
+                            if spline[-2] not in conv_breakdown.keys():
+                                conv_breakdown[spline[-2]] = {"optime":float(spline[-3])}
                             else:
-                                conv_breakdown[spline[-2]] += float(spline[-3])
+                                conv_breakdown[spline[-2]]["optime"] += float(spline[-3])
                         line = " , ".join(spline)
                         newoutfile.write(line + "\n")
                     else:
@@ -961,13 +957,29 @@ def newgpu(oldgpu, new_gpu_file, kernels_to_gpu, order, gpu_op, gpu_part):
                     "framework_time(ms)": ["framework", total_framework],
                     "benchdnn(ms)": ["benchdnn", total_benchdnn]}
 
+
+        for key in new_gpu_op.keys():
+            if "benchdnn" not in new_gpu_op[key]:
+                new_gpu_op[key]["benchdnn"] = 0.0
+
+        print("new_gpu_op = ", new_gpu_op)
         for key, value in new_gpu_op.items():
             row = [key]
             for col in titleorder[1:]:
                 if not titlepos.get(col):
                     row.append("")
                     continue
-                if "benchdnn" == titlepos.get(col)[0]:
+                if not value.get(titlepos.get(col)[0]):
+                    row.append("")
+                    continue
+                if value[titlepos.get(col)[0]] == "":
+                    value[titlepos.get(col)[0]] = 0.0
+
+                # print("titlepos.get(col)[0] = ", titlepos.get(col)[0])
+                # print("titlepos.get(col)[1] = ", titlepos.get(col)[1])
+                # print("value[titlepos.get(col)[0]] = ", value[titlepos.get(col)[0]])
+
+                if titlepos.get(col)[0] == "benchdnn":
                     row.append(value[titlepos.get(col)[0]])
                     titlepos.get(col)[1] += value[titlepos.get(col)[0]]
                 else:
@@ -985,35 +997,43 @@ def newgpu(oldgpu, new_gpu_file, kernels_to_gpu, order, gpu_op, gpu_part):
         row = " , ".join('%s' % time for time in row)
         newoutfile.write(row + "\n")
 
+
+
         newoutfile.write("\npart time list below" + "\n")
         newoutfile.write('{0} , {1}\n'.format("preprocessing", gpu_part["data1"] * 1000 / float(iteration)))
         newoutfile.write('{0} , {1}\n'.format("run", gpu_part["run"] * 1000 / float(iteration)))
         newoutfile.write('{0} , {1}\n'.format("postprocessing", gpu_part["misc_bbox"] * 1000 / float(iteration)))
 
-
         total_optime, total_reorder, total_kernel, total_framework, total_benchdnn = 0, 0, 0, 0, 0
+        titlepos = {"optime(ms)": ["optime", total_optime],
+                    "reorder(ms)": ["reorder_time", total_reorder],
+                    "kernel(ms)": ["kernel_time", total_kernel],
+                    "framework_time(ms)": ["framework", total_framework],
+                    "benchdnn(ms)": ["benchdnn", total_benchdnn]}
         newoutfile.write("\nconv primitive and Comp time\n")
         for kname in order["conv_comp_order"]:
             row = [kname]
             for col in titleorder[1:]:
-                if isinstance(conv_breakdown[kname], dict):
-                    if not titlepos.get(col) or not conv_breakdown[kname].get(titlepos.get(col)):
-                        row.append("")
-                        continue
-                    row.append(conv_breakdown[kname][titlepos.get(col)[0]])
-                    titlepos.get(col)[1] += conv_breakdown[kname][titlepos.get(col)[0]]
-                row = " , ".join('%s' % time for time in row)
-                newoutfile.write(row + "\n")
-                continue
-            row = ["total time"]
-            for col in titleorder[1:]:
-                if not titlepos.get(col) or not conv_breakdown[kname].get(titlepos.get(col)):
+                if not titlepos.get(col):
                     row.append("")
                     continue
-                row.append(titlepos.get(col)[1])
+                if not conv_breakdown[kname].get(titlepos.get(col)[0]):
+                    row.append("")
+                    continue
+                row.append(conv_breakdown[kname][titlepos.get(col)[0]])
+                titlepos.get(col)[1] += conv_breakdown[kname][titlepos.get(col)[0]]
+
             row = " , ".join('%s' % time for time in row)
             newoutfile.write(row + "\n")
-
+            continue
+        row = ["total time"]
+        for col in titleorder[1:]:
+            if not titlepos.get(col):
+                row.append("")
+                continue
+            row.append(titlepos.get(col)[1])
+        row = " , ".join('%s' % time for time in row)
+        newoutfile.write(row + "\n")
 
 
 
