@@ -5,7 +5,6 @@ import getopt
 import os
 import copy
 import collections
-# from subprocess import check_output, check_call, CalledProcessError
 import subprocess
 try:
     from progressbar import *
@@ -34,10 +33,8 @@ def pbtxt(pbtxt_file):
 
             if "op {" in line:
                 layer_count += 1
-                # print(layer_count)
                 if layer_count == 1:
                     cname["start"], gname["start"] = 0, 0
-                # if layer_count > 1 and fusion_type != "":
                 if layer_count > 1:
                     for i in range(len(cname)):
                         if tyname in cname:
@@ -79,8 +76,6 @@ def pbtxt(pbtxt_file):
                     gname[ename] = fusion_type
     del cname["start"]
     del gname["start"]
-    # print("cname = {}\n".format(cname))
-    # print("gname = ", gname)
 
     return cname, gname
 
@@ -128,19 +123,17 @@ def benchdnn(eopnames, pbtxt, graph, op, kernels):
         if kernel_shape != "":
             cmd.append(kernel_shape)
             try:
-                # # output = check_output(cmd)
-                # comd = subprocess.Popen(" ".join(cmd), shell=True, stdout=subprocess.PIPE)
-                # std = comd.communicate()
-                # time = re.findall(r'.*min\(ms\):(\d+\.\d+)\savg\(ms\):(\d+\.\d+).*', std[0].decode(encoding='utf-8'))
-                # if time == []:
-                #     benchdnn_graph[each]["benchdnn"] = {"min time": "", "avg time": ""}
-                #     print(each)
-                #     print(" ".join(cmd))
-                #     continue
-                # min_time = float(time[0][0])
-                # avg_time = float(time[0][1])
-                min_time = 2
-                avg_time = 2
+                # output = check_output(cmd)
+                comd = subprocess.Popen(" ".join(cmd), shell=True, stdout=subprocess.PIPE)
+                std = comd.communicate()
+                time = re.findall(r'.*min\(ms\):(\d+\.\d+)\savg\(ms\):(\d+\.\d+).*', std[0].decode(encoding='utf-8'))
+                if time == []:
+                    benchdnn_graph[each]["benchdnn"] = {"min time": "", "avg time": ""}
+                    print(each)
+                    print(" ".join(cmd))
+                    continue
+                min_time = float(time[0][0])
+                avg_time = float(time[0][1])
                 print(each,"     benchdnn: min time = ", min_time, "   avg time = ", avg_time)
                 benchdnn_graph[each]["benchdnn"] = {"min time": min_time, "avg time": avg_time}
                 eop = re.split(r'\d+$', each)[0]
@@ -149,10 +142,6 @@ def benchdnn(eopnames, pbtxt, graph, op, kernels):
                 else:
                     benchop[eop]["benchdnn"] = avg_time
 
-                # benchkernels[kernel_type[0]][kernel_type[1]]["kernel_time"] = avg_time
-                # print("benchkernels = ", benchkernels)
-                # print("kernel_type[0] = ", kernel_type[0])
-                # print("kernel_type[1] = ", kernel_type[1])
                 if "benchdnn" in benchkernels[kernel_type[0]][kernel_type[2]]:
                     benchkernels[kernel_type[0]][kernel_type[2]]["benchdnn"] += avg_time
                 else:
@@ -167,10 +156,6 @@ def benchdnn(eopnames, pbtxt, graph, op, kernels):
         for key in benchop.keys():
             if "benchdnn" not in benchop[key]:
                 benchop[key]["benchdnn"] = 0.0
-
-        # for each in benchdnn_graph.keys():
-        #     if benchdnn_graph[each]["benchdnn"]["avg time"] != "" and benchdnn_graph[each]["benchdnn"]["avg time"] != 0:
-        #         benchdnn_graph[each]["ratio"] =
 
     for key, value in benchdnn_graph.items():
         if value["benchdnn"]["avg time"] != "" and value["benchdnn"]["avg time"] != 0:
@@ -262,13 +247,17 @@ def getinfo(filename):
                 if y1 != None and not sameop:
                     sameop = True
                     if y1.group(1):
-                        npos = y1.group(1).index(':')
-                        if npos >= 0:
-                            extraname = y1.group(1)[0:npos - 1]
+                        if ":" in y1.group(1):
+                            npos = y1.group(1).index(':')
+                            if npos >= 0:
+                                extraname = y1.group(1)[0:npos - 1]
+                            else:
+                                extraname = y1.group(1)
+                            opname = extraname + y1.group(2)
+                            eopname = extraname + y1.group(2)
                         else:
-                            extraname = y1.group(1)
-                        opname = extraname + y1.group(2)
-                        eopname = extraname + y1.group(2)
+                            opname = y1.group(2)
+                            eopname = y1.group(2)
                     else:
                         opname = y1.group(2)
                         eopname = y1.group(2)
@@ -310,7 +299,6 @@ def getinfo(filename):
                             kernel_type = y8.group(2)
                             kernel_shape = y8.group(6)
                             kernel_time = time
-                            # print("fwei = ", re.findall(r'.*fwei:(\S+)\s.*', y8.group(4)))
                             try:
                                 fwei = re.findall(r'.*fwei:(\S+)\s.*', y8.group(4))[0]
                             except IndexError:
@@ -361,7 +349,6 @@ def getinfo(filename):
                         op[opname]["optime"] = op[opname]["optime"] + optime
                     else:
                         op[opname]["optime"] = optime
-                    #op[opname]["framework"] = op[opname]["optime"] - op[opname]["reorder_time"] - op[opname]["kernel_time"]
 
                     if kernel_flag:
                         kernel_flag = False
@@ -386,7 +373,6 @@ def getinfo(filename):
                         graph[eopname]["reorder_time"] += eachop["reorder_time"]
                         graph[eopname]["kernel_time"] += eachop["kernel_time"]
                         graph[eopname]["framework"] += eachop["framework"]
-                    #print("eachop = ", eachop)
                     eachop = {}
 
                 elif y2 != None:
@@ -584,26 +570,21 @@ def summary(cfilename, gfilename):
     gpu = {}
     cpu_key_list = []
     gpu_key_list = []
-    # cpu = collections.OrderedDict()
-    # gpu = collections.OrderedDict()
     with open(cfilename, "r") as fc, open(gfilename, "r") as fg:
         for line in fc.readlines():
             line = line.split(" , ")
             if line[-1] == "\n" or line[-1][-1] == "\n":
                 line[-1] = line[-1][:-1]
-            # print(line)
             try:
                 if kernel == "1":
                     if len(line) > 1 and isinstance(float(line[1]), float):
                         cpu_key_list.append(line[0])
                         if pb:
-                            # line[8] maybe "" ,such as Maxpool
                             cpu[line[0]] = {"optime": float(line[1]), "reorder_time": float(line[2]),
                                             "kernel_time": float(line[3]), "framework": float(line[4]),
                                             "kernel_type": line[5], "kernel_shape": line[6],
                                             "fusion_type": line[7], "benchdnn":line[8]}
-                        # try:
-                        # except IndexError:
+
                         else:
                             cpu[line[0]] = {"optime":float(line[1]), "reorder_time":float(line[2]),
                                             "kernel_time":float(line[3]), "framework":float(line[4]),
@@ -616,8 +597,6 @@ def summary(cfilename, gfilename):
                 else:
                     if len(line) > 1 and isinstance(float(line[1]), float):
                         cpu_key_list.append(line[0])
-                        # cpu[line[0]] = [float(line[1]), float(line[2]), float(line[3]),
-                        #                 float(line[4])]
                         cpu[line[0]] = {"optime": float(line[1]), "reorder_time": float(line[2]),
                                         "kernel_time": float(line[3]), "framework": float(line[4])}
                     else:
@@ -641,8 +620,6 @@ def summary(cfilename, gfilename):
                 if kernel == "1":
                     if len(line) > 1 and isinstance(float(line[1]), float):
                         gpu_key_list.append(line[0])
-                        # gpu[line[0]] = float(line[1])
-                        # gpu[line[0]] = [float(line[1]), line[2], line[3]]
                         gpu[line[0]] = {"optime":float(line[1]), "kernel_type":line[2], "kernel_shape":line[3]}
                     else:
                         if "sum of kinds of op time" in line[0]:
@@ -670,8 +647,6 @@ def summary(cfilename, gfilename):
             if "ConvFusion" in cpu_key_list[i] and "Conv" in cpu_key_list[i + 1]:
                 if "Conv" not in gpu_key_list[pos]:
                     exit("please check the program in {}".format(gpu_key_list[pos]))
-                # kernels_to_gpu[gpu_key_list[pos]] = [cpu[cpu_key_list[i]]["kernel_type"],
-                #                                      cpu[cpu_key_list[i]]["kernel_shape"]]
                 if pb:
                     kernels_to_gpu[gpu_key_list[pos]] = {"kernel_type": cpu[cpu_key_list[i]]["kernel_type"],
                                                          "kernel_shape": cpu[cpu_key_list[i]]["kernel_shape"],
@@ -687,13 +662,10 @@ def summary(cfilename, gfilename):
                 while "Conv" not in gpu_key_list[pos]:
                     newtime += gpu[gpu_key_list[pos]]["optime"]
                     pos += 1
-                # newtime:th sum of Merged layer time    convname:gpu layer name  convtime: only conv layer's time
                 new_gpu[cpu_key_list[i]] = [newtime, convname, convtime]
             elif "ConvFusion" in cpu_key_list[i] and "Conv" not in cpu_key_list[i + 1]:
                 if "Conv" not in gpu_key_list[pos]:
                     exit("please check the program in {}".format(gpu_key_list[pos]))
-                # kernels_to_gpu[gpu_key_list[pos]] = [cpu[cpu_key_list[i]]["kernel_type"],
-                #                                      cpu[cpu_key_list[i]]["kernel_shape"]]
                 if pb:
                     kernels_to_gpu[gpu_key_list[pos]] = {"kernel_type": cpu[cpu_key_list[i]]["kernel_type"],
                                                          "kernel_shape": cpu[cpu_key_list[i]]["kernel_shape"],
@@ -713,8 +685,6 @@ def summary(cfilename, gfilename):
             elif "Conv" in cpu_key_list[i] and "ConvFusion" not in cpu_key_list[i]:
                 if "Conv" not in gpu_key_list[pos]:
                     exit("please check the program in {}".format(gpu_key_list[pos]))
-                # kernels_to_gpu[gpu_key_list[pos]] = [cpu[cpu_key_list[i]]["kernel_type"],
-                #                                      cpu[cpu_key_list[i]]["kernel_shape"]]
                 if pb:
                     kernels_to_gpu[gpu_key_list[pos]] = {"kernel_type": cpu[cpu_key_list[i]]["kernel_type"],
                                                          "kernel_shape": cpu[cpu_key_list[i]]["kernel_shape"],
@@ -789,12 +759,10 @@ def newgpu(oldgpu, new_gpu_file, kernels_to_gpu, order, gpu_op, gpu_part):
     with open(new_gpu_file, "w") as newoutfile, open(oldgpu, "r") as fg:
         for line in fg.readlines():
             if "sum of kinds of op" in line:
-                # end = True
                 newoutfile.write(line)
                 break
 
             if "sum of kinds of op" in line:
-                # end = True
                 newoutfile.write(line)
                 break
             else:
@@ -811,7 +779,6 @@ def newgpu(oldgpu, new_gpu_file, kernels_to_gpu, order, gpu_op, gpu_part):
 
                 if pb:
                     if spline[0] in kernels_to_gpu:
-                        # print(spline)
                         if "benchdnn" in kernels_to_gpu[spline[0]]:
                             sumopname = re.split(r'\d+$', spline[0])[0]
                             if kernels_to_gpu[spline[0]]["benchdnn"] != "":
@@ -824,10 +791,8 @@ def newgpu(oldgpu, new_gpu_file, kernels_to_gpu, order, gpu_op, gpu_part):
                         if spline[-3] != "":
                             if spline[-3] not in conv_breakdown.keys():
                                 conv_breakdown[spline[-3]] = {"optime": float(spline[-4])}
-                                # conv_breakdown[spline[-3]] = float(spline[-4])
                             else:
                                 conv_breakdown[spline[-3]]["optime"] += float(spline[-4])
-                                # conv_breakdown[spline[-3]] += float(spline[-4])
 
                             if kernels_to_gpu[spline[0]]["benchdnn"] != "":
                                 if "benchdnn" in conv_breakdown[spline[-3]].keys():
@@ -866,7 +831,6 @@ def newgpu(oldgpu, new_gpu_file, kernels_to_gpu, order, gpu_op, gpu_part):
             if "benchdnn" not in new_gpu_op[key]:
                 new_gpu_op[key]["benchdnn"] = 0.0
 
-        # print("new_gpu_op = ", new_gpu_op)
         for key, value in new_gpu_op.items():
             row = [key]
             for col in titleorder[1:]:
@@ -874,14 +838,13 @@ def newgpu(oldgpu, new_gpu_file, kernels_to_gpu, order, gpu_op, gpu_part):
                     row.append("")
                     continue
                 if not value.get(titlepos.get(col)[0]):
+                    if titlepos.get(col)[0] == "benchdnn":
+                        row.append(0.0)
+                        continue
                     row.append("")
                     continue
                 if value[titlepos.get(col)[0]] == "":
                     value[titlepos.get(col)[0]] = 0.0
-
-                # print("titlepos.get(col)[0] = ", titlepos.get(col)[0])
-                # print("titlepos.get(col)[1] = ", titlepos.get(col)[1])
-                # print("value[titlepos.get(col)[0]] = ", value[titlepos.get(col)[0]])
 
                 if titlepos.get(col)[0] == "benchdnn":
                     row.append(value[titlepos.get(col)[0]])
@@ -956,15 +919,14 @@ if __name__ == '__main__':
         exit("The first parameter should be the log file running on the CPU!")
     for opt, arg in opts:
         if opt == '-h':
-            print('python profile.py <cpu_log> -g <gpu_log> -o <output> -b <pbtxt>')
+            print('python profile.py <cpu_log> -g <gpu_log> -o <output> -b <pbtxt> <benchdnn_path>')
             print(' ')
-            print('for example: profile.py CPU_log -g GPU_log -o output_folder -b pbtxt')
-            print('If you don\'t want kernel info, you can set -k <kernel> to 0' )
-            print('If you don\'t want compared info, you can set -s <sum> to 0')
-            print('The first parameter is GPU\'log, don\'t need options')
+            print('for example: profile.py CPU_log -g GPU_log -o output_folder -b pbtxt benchdnn_path')
+            print('If you don\'t want kernel info, you can set -k <kernel> to 0, default "1"' )
+            print('If you don\'t want compared info, you can set -s <sum> to 0, default "1"')
             print('output: the output folder')
-            print('sum: gpu compared with cpu')
-            print('kernel: 1 or 0')
+            print('The first parameter is GPU\'log, don\'t need options')
+            print('If you set [-b] para,The last parameter should be benchdnn path, don\'t need options')
             sys.exit()
 
         elif opt in ("-g", "--gpu"):
@@ -979,12 +941,17 @@ if __name__ == '__main__':
             sum = arg
         elif opt in ("-k", "--kernel"):
             kernel = arg
-
-    if not os.path.isdir(output_folder):
-        exit("The output path is wrong, it shoule be a folder!")
+    try:
+        if not os.path.isdir(output_folder):
+            exit("The output path is wrong, it shoule be a folder!")
+    except NameError:
+        exit("\033[1;31;40m{}\033[0m".format('Error! use -h for help'))
 
     if "pbtxt_file" in locals().keys():
-        benchdnn_file = args[0]
+        try:
+            benchdnn_file = args[0]
+        except IndexError:
+            exit("\033[1;31;40m{}\033[0m".format("If you enter the [-b] parameter, you should specify the benhdnn path at the end."))
         if not os.path.isfile(benchdnn_file):
             exit("\033[1;31;40m{}\033[0m".format("Error: benchdnn path is wrong !"))
         elif "benchdnn" != os.path.split(benchdnn_file)[-1]:
@@ -1013,18 +980,14 @@ if __name__ == '__main__':
         else:
             cpu_order, cpu_out_file = output(cpu_out, graph, eopnames, part, op, kernels, iteration)
 
-        # cpu_out_file = cpu_out
 
         graph, eopnames, gpu_part, gpu_op, kernels, iteration = getinfo(gpu_file)
         if pb:
-            # if kernel == "1":
-            #     graph = benchdnn(eopnames, gpu_fusion_type, graph)
             gpu_order, gpu_out_file = output(gpu_out, graph, eopnames, gpu_part, gpu_op,
                                              kernels, iteration, pbtxt=gpu_fusion_type)
         else:
             gpu_order, gpu_out_file = output(gpu_out, graph, eopnames, gpu_part, gpu_op, kernels, iteration)
         cpu, new_gpu, kernels_to_gpu, new_op = summary(cpu_out_file, gpu_out_file)
-        # if "sum_file" in locals().keys():
         if sum == "1":
             sum_file = os.path.join(output_folder, "compared_result.csv")
             sumfile(cpu, sum_file, new_gpu)
